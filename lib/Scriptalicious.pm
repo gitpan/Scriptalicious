@@ -378,7 +378,7 @@ sub capture_err {
 
 =head1 AUTHOR
 
-Sam Vilain, samv@marketview.co.nz
+Sam Vilain, samv@cpan.org
 
 =cut
 
