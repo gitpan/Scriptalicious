@@ -6,7 +6,7 @@ use strict;
 use warnings;
 use Carp qw(croak);
 
-our $VERSION = "1.04";
+our $VERSION = "1.04_01";
 
 =head1 NAME
 
@@ -107,7 +107,9 @@ BEGIN {
     our @EXPORT = qw(say mutter whisper abort moan barf run run_err
 		     capture capture_err getopt $VERBOSE $PROGNAME
 		     start_timer show_delta show_elapsed getconf
-		     getconf_f sci_unit);
+		     getconf_f sci_unit prompt_for prompt_passwd
+		     prompt_yn
+		    );
 }
 
 
@@ -481,6 +483,34 @@ to exa).  Optionally specify a precision which is passed to sprintf()
 The scripts assumes an ISO-8559-1 encoding on output, and so will
 print a MU character (\265) to mean micro.
 
+=item B<prompt_regex($prompt, sub { /(.*)/ && $1 })>
+
+Prompts for something, using the prompt "C<$prompt>", feeding the sub
+with the entered value (sans trailing linefeed), to use a default, the
+passed sub should simply return it with empty input.
+
+=item B<prompt_passwd([$prompt])>
+
+Same as C<prompt_regex>, but turns off echo.  C<$prompt> defaults to
+"C<Password: >" for this function.
+
+=item B<prompt_string([$prompt])>
+
+=item B<prompt_for([$what])>
+
+Prompt for a string.  The C<prompt_for()> method is just semantic
+sugar.
+
+=item B<prompt_yn([$prompt])>
+
+prompts for yes or no, presuming neither
+
+=item B<prompt_Yn([$prompt])>
+
+=item B<prompt_yN([$prompt])>
+
+prompts for yes or no, presuming yes and no, respectively.
+
 =item B<foo()>
 
 If you've got a short little Perl function that implements something
@@ -517,12 +547,12 @@ Sam Vilain, samv@cpan.org
 
 =cut
 
-our $DATA = join "", <DATA>;  close DATA;
-our ($AUTOLOAD, $l);sub AUTOLOAD{croak"No such function $AUTOLOAD"if
-$l;(undef,my($f,$n))=ll();$n+=2;eval"# line $n \"$f\"\n$DATA";
-$@&&die"Error in autoload: $@";
-$l=1;goto &{$AUTOLOAD};}sub ll{sub{caller()}->();}     "P E A C E";
-__DATA__
+#our $DATA = join "", <DATA>;  close DATA;
+#our ($AUTOLOAD, $l);sub AUTOLOAD{croak"No such function $AUTOLOAD"if
+#$l;(undef,my($f,$n))=ll();$n+=2;eval"# line $n \"$f\"\n$DATA";
+#$@&&die"Error in autoload: $@";
+#$l=1;goto &{$AUTOLOAD};}sub ll{sub{caller()}->();}     "P E A C E";
+#__DATA__
 
 our ($NAME, $SHORT_DESC, $SYNOPSIS, $DESCRIPTION, @options);
 
@@ -914,3 +944,99 @@ sub _process_conf {
     }
 }
 
+our $term;
+
+sub term {
+    $term ||= do {
+	eval { require Term::ReadLine;
+	       Term::ReadLine->new(__PACKAGE__)
+	       } || (bless { IN => \*STDIN,
+			     OUT => \*STDOUT }, __PACKAGE__);
+    };
+}
+
+sub OUT { $_[0]->{OUT} }
+sub IN  { $_[0]->{IN} }
+
+sub readline {
+    my $self = shift;
+    my $prompt = shift;
+
+    my $OUT = $self->OUT;
+    my $IN = $self->OUT;
+
+    print $OUT "$prompt? ";
+    my $res = readline $IN;
+    chomp($res);
+
+    return $res;
+}
+
+sub prompt_passwd {
+    my $prompt = shift || "Password: ";
+
+    eval {
+	require Term::ReadKey;
+    };
+    barf "cannot load Term::ReadKey" if $@;
+
+    Term::ReadKey::ReadMode('noecho');
+    my $passwd;
+    eval { $passwd = prompt_regex($prompt, @_) };
+    Term::ReadKey::ReadMode('restore');
+    die $@ if $@;
+    $passwd;
+}
+
+sub prompt_regex {
+    my $prompt = shift;
+    my $sub = shift;
+    my $moan = shift;
+    while ( defined ($_ = term->readline($prompt)) ) {
+	#print "\n";
+	if ( $sub ) {
+	    if ( defined(my $res = $sub->($_)) ) {
+		return $res;
+	    } else {
+		moan ($moan || "bad response `$_'");
+	    }
+	} else {
+	    return $_;
+	}
+    }
+    barf "EOF on input";
+}
+
+sub prompt_for {
+    my $what = shift;
+    my $default = shift;
+    prompt_regex( ("Value for $what"
+		   .($default?" [$default]":"")
+		   .": "),
+		  sub { $_ || $default },
+		),
+}
+
+sub prompt_string {
+    my $prompt = shift;
+    prompt_regex($prompt, sub { $_ });
+}
+
+sub prompt_Yn {
+    prompt_regex ($_[0], sub {( /^\s*(?: (?:(y.*))? | (n.*))\s*$/ix &&
+				($2 ? 0 : (defined($1) ? 1 : undef)) 
+			      )} );
+}
+sub prompt_yn {
+    prompt_regex ($_[0], sub {( /^\s*(?: (y.*) | (n.*))\s*$/ix &&
+				($2 ? 0 : ($1 ? 1 : undef)) 
+			      )},
+		  "please enter `yes', or `no'" );
+}
+sub prompt_yN {
+    prompt_regex ($_[0], sub {( /^\s*(?: (y.*)? | (?:(n.*))? )\s*$/ix &&
+				($1 ? 1 : (defined($2) ? 0 : undef)) 
+			      )} );
+}
+
+1;
