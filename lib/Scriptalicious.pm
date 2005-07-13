@@ -6,7 +6,7 @@ use strict;
 use warnings;
 use Carp qw(croak);
 
-our $VERSION = "1.04_02";
+our $VERSION = "1.05";
 
 use Getopt::Long;
 use base qw(Exporter);
@@ -90,7 +90,7 @@ sub whisper { say @_ if $VERBOSE > 1 }
 sub _err_say { print STDERR "$PROGNAME: @_\n" }
 sub abort { _err_say "aborting: @_"; &show_usage; }
 sub moan { _err_say "warning: @_" }
-sub barf { if($^S){die"@_"}else{ _err_say "ERROR: @_"; exit(1); } }
+sub barf { if($^S){die @_}else{ _err_say "ERROR: @_"; exit(1); } }
 
 #---------------------------------------------------------------------
 #  helpers for running commands and/or capturing their output
@@ -752,23 +752,34 @@ sub setup_fds {
 
     my (@fds) = sort { $a <=> $b } keys %$fdset;
     $^F = $fds[$#fds] if $fds[$#fds] > 2;
+
+    # there is a slight problem with this - for instance, if the user
+    # supplies a closure that is reading from a file, and that file
+    # happens to be opened on a filehandle that they want to use, then
+    # it will be closed and the code break.  Ho hum.
     for ( 3..$fds[$#fds] ) {
-	open BAM, ">&=$_";
-	close BAM;
+	open BAM, "<&=$_";
+	if ( fileno(BAM) ) {
+	    close BAM;
+	} else {
+	    open BAM, ">&=$_";
+	    if ( fileno(BAM) ) {
+		close BAM;
+	    }
+	}
     }
 
     while ( my ($fnum, $spec) = each %$fdset ) {
 	my ($mode, $where) = @$spec;
-	#open(my $fd, "&=$fnum") or barf "failed to fopen($fnum); $!";
-	my $fd; # = $fds{$fnum};
+	my $fd;
 
 	if ( !ref $where ) {
 	    open($fd, "$mode$where")
 		or barf "failed to re-open fd $fnum $mode$where; $!";
 	}
 	elsif ( ref $where eq "GLOB" ) {
-	    open($fd, ">&".fileno($where))
-		or barf "failed to re-open fd $fnum $mode GLOB; $!";
+	    open($fd, "$mode&".fileno($where))
+		or barf "failed to re-open fd $fnum $mode &fd(".fileno($where)."; $!";
 	}
 	elsif ( ref $where eq "CODE" ) {
 	    pipe(\*{"FD${fnum}_R"}, \*{"FD${fnum}_W"});
@@ -798,11 +809,14 @@ sub setup_fds {
 	    barf "bad spec for FD $fnum";
 	}
 
-	open \*{"FD$fnum"}, "$mode&=$fnum";
-	open \*{"FD$fnum"}, "$mode&".fileno($fd);
-	fileno(\*{"FD$fnum"}) == $fnum
-	    or barf "tried to setup on FD $fnum, but got ".fileno(\*{"FD$fnum"});
-	close $fd;
+	# don't use a lex here otherwise it gets auto-closed
+	open (\*{"FD${fnum}"}, "$mode&=$fnum");
+	open \*{"FD${fnum}"}, "$mode&".fileno($fd);
+	fileno(\*{"FD${fnum}"}) == $fnum
+	    or do {
+		barf ("tried to setup on FD $fnum, but got "
+		      .fileno(\*{"FD$fnum"})."(spec: $mode $where)");
+	    };
     }
 }
 
