@@ -1,24 +1,12 @@
----
-name: Scriptalicious
-version: 1.10
-author: ~
-abstract: ~
-license: perl
-recommends:
-  Term::ReadKey: 0
-  Text::Wrap: 0
-  Time::HiRes: 0
-  YAML: 0
-build_requires:
-  Test::More: 0
-provides:
-  Scriptalicious:
-    file: lib/Scriptalicious.pm
-    version: 1.10
-  Scriptalicious::DataLoad:
-    file: lib/Scriptalicious.pm
-    version: 1.10
-  Scriptalicious::Template:
-    file: lib/Scriptalicious.pm
-    version: 1.10
-generated_by: Module::Build version 0.2611
+# http://module-build.sourceforge.net/META-spec.html
+#XXXXXXX This is a prototype!!!  It will change in the future!!! XXXXX#
+name:         Scriptalicious
+version:      1.11
+version_from: lib/Scriptalicious.pm
+installdirs:  site
+requires:
+    Term::ReadKey:                 0
+    Test::More:                    0
+
+distribution_type: module
+generated_by: ExtUtils::MakeMaker version 6.30_01

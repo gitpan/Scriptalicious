@@ -6,7 +6,7 @@ use strict;
 use warnings;
 use Carp qw(croak);
 
-our $VERSION = "1.10";
+our $VERSION = "1.11";
 
 use Getopt::Long;
 use base qw(Exporter);
@@ -19,16 +19,18 @@ BEGIN {
 		     start_timer show_delta show_elapsed getconf
 		     getconf_f sci_unit prompt_for prompt_passwd
 		     prompt_yn prompt_Yn prompt_yN prompt_string
+		     prompt_nY prompt_Ny prompt_ny
 		     prompt_int tsay anydump prompt_regex prompt_sub
-		     prompt_file
+		     prompt_file hush_exec unhush_exec
 		    );
 }
 
 # define this in subclasses where appropriate
 sub __package__ { __PACKAGE__ }
 
-our ($VERBOSE, $closure);
+our ($VERBOSE, $closure, $SHOW_CMD_VERBOSE, $gotconf);
 $VERBOSE = 0;
+$SHOW_CMD_VERBOSE = 1;
 
 #---------------------------------------------------------------------
 #  parse import arguments and export symbols
@@ -66,6 +68,7 @@ sub getopt {
 
     local($closure) = \&show_usage;
 
+    $gotconf = 1;
     Getopt::Long::GetOptions
 	    (
 	     'help|h' => \&show_help,
@@ -85,14 +88,17 @@ sub getopt {
 	if $#ARGV >= 0 and $ARGV[0] =~ m/^-/;
 }
 
-sub say { print "$PROGNAME: @_\n" unless $VERBOSE < 0 }
+sub say { _autoconf() unless $gotconf;
+	  print "$PROGNAME: @_\n" unless $VERBOSE < 0 }
 sub mutter { say @_ if $VERBOSE }
 sub whisper { say @_ if $VERBOSE > 1 }
-sub _err_say { print STDERR "$PROGNAME: @_\n" }
+sub _err_say { _autoconf() unless $gotconf;
+	       print STDERR "$PROGNAME: @_\n" }
 sub abort { _err_say "aborting: @_"; &show_usage; }
 sub moan { _err_say "warning: @_" }
 sub protest { _err_say "error: @_" }
 sub barf { if($^S){die @_}else{ _err_say "ERROR: @_"; exit(1); } }
+sub _autoconf { getopt( eval{ my @x = getconf(@_); @x } ) }
 
 #---------------------------------------------------------------------
 #  helpers for running commands and/or capturing their output
@@ -110,6 +116,15 @@ sub shellquote {
     }; $_ } map { $_ } @_);
 }
 
+our @SHOW_CMD_VERBOSE;
+sub hush_exec {
+    push @SHOW_CMD_VERBOSE, $SHOW_CMD_VERBOSE;
+    $SHOW_CMD_VERBOSE=2;
+}
+sub unhush_exec {
+    $SHOW_CMD_VERBOSE = pop @SHOW_CMD_VERBOSE;
+}
+
 our @last_cmd;
 sub run {
     &run_err(@_);
@@ -122,7 +137,7 @@ sub run {
          (($? >> 8)
           ? "exited with error code ".($?>>8)
           : "killed by signal $?")
-         .(($VERBOSE >= 1 or $next_cmd_no_hide) ? ""
+         .(($VERBOSE >= $SHOW_CMD_VERBOSE or $next_cmd_no_hide) ? ""
            : (($start != 0
 	       ? "\nlast lines of output:\n"
 	       : "\nprogram output:\n")
@@ -136,7 +151,7 @@ sub run {
 sub do_fork {
     @output = ();
     if (not $next_cmd_capture and
-	( $VERBOSE >= 1 or $next_cmd_no_hide )) {
+	( $VERBOSE >= $SHOW_CMD_VERBOSE or $next_cmd_no_hide )) {
         return fork()
     } else {
         my $pid = open CHILD, "-|";
@@ -151,11 +166,11 @@ sub _waitpid {
     my $pid = shift;
 
     if (not $next_cmd_capture and
-	($VERBOSE >= 1 or $next_cmd_no_hide)) {
+	($VERBOSE >= $SHOW_CMD_VERBOSE or $next_cmd_no_hide)) {
         waitpid($pid, 0);
     } else {
-        while (<CHILD>) {
-            push @output, $_;
+        while (my $line = <CHILD>) {
+            push @output, $line;
         }
         close CHILD;
     }
@@ -181,12 +196,14 @@ sub run_err {
 	$fd_desc .= ($fd_desc ? ", " : "") . "fd$fd=$mode$fds{$fd}";
     }
     @last_cmd = @_;
-    mutter("running `".shellquote(@last_cmd)."'"
-	   .($next_cmd_capture
-	     ? " (captured)"
-	     : "")
-	   .($fd_desc?"($fd_desc)":"")
-	  ) unless ref($_[0]);
+    if ( $VERBOSE >= $SHOW_CMD_VERBOSE ) {
+	say("running `".shellquote(@last_cmd)."'"
+	    .($next_cmd_capture
+	      ? " (captured)"
+	      : "")
+	    .($fd_desc?"($fd_desc)":"")
+	   ) unless ref($_[0]);
+    }
     _load_hires;
 
     my $start = start_timer();
@@ -209,8 +226,10 @@ sub run_err {
             barf "exec failed; $!";
         }
     }
-    mutter sprintf("command completed in ".show_elapsed($start))
-	if $VERBOSE > 0;
+
+    if ( $VERBOSE >= $SHOW_CMD_VERBOSE ) {
+	say sprintf("command completed in ".show_elapsed($start))
+    }
 
     return $?
 
@@ -727,7 +746,7 @@ sub prompt_string {
     my $prompt = shift;
     my $default = shift;
     prompt_sub($prompt.(defined($default)?" [$default]":""),
-		 sub { $_ || $default });
+		 sub { $_ || $default || $_ });
 }
 
 sub prompt_int {
@@ -741,23 +760,26 @@ sub prompt_int {
 sub prompt_nY { prompt_Yn(@_) }
 sub prompt_Yn {
     prompt_sub ($_[0]." [Yn]",
-		  sub {( /^\s*(?: (?:(y.*))? | (n.*))\s*$/ix &&
-			 ($2 ? 0 : (defined($1) ? 1 : undef)) 
-		       )} );
+		sub { ( /^\s*(?: (?:(y.*))? | (n.*))\s*$/ix
+			? ($2 ? 0 : 1)
+			: undef )},
+	       );
 }
+sub prompt_ny { prompt_yn(@_) }
 sub prompt_yn {
     prompt_sub ($_[0]." [yn]",
-		  sub {( /^\s*(?: (y.*) | (n.*))\s*$/ix &&
-			 ($2 ? 0 : ($1 ? 1 : undef)) 
-		       )},
-		  "please enter `yes', or `no'" );
+		sub {( /^\s*(?: (y.*) | (n.*))\s*$/ix
+		       ? ($2 ? 0 : ($1 ? 1 : undef))
+		       : undef
+		     )},
+		"please enter `yes', or `no'" );
 }
 sub prompt_Ny { prompt_yN(@_) }
 sub prompt_yN {
     prompt_sub ($_[0]." [Ny]",
-		  sub {( /^\s*(?: (y.*)? | (?:(n.*))? )\s*$/ix &&
-			 ($1 ? 1 : (defined($2) ? 0 : undef)) 
-		       )} );
+		sub {( /^\s*(?: (y.*)? | (?:(n.*))? )\s*$/ix
+		       ? ($1 ? 1 : 0)
+		       : undef )} );
 }
 
 sub prompt_file {
@@ -1003,6 +1025,7 @@ sub fetch {
     my @data;
     if ( open(my $script, $0) ) {
 	"" =~ m{()};  # clear $1
+	local(*_);
 	while ( <$script> ) {
 	    if ( m{^__\Q$name\E__$} .. (m{^__(?!\Q$name\E)(\w+)__$}||eof $script) ) {
 		$found++ or next;

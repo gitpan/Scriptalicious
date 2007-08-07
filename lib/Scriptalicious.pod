@@ -328,6 +328,16 @@ Usage:
 
    my ($rc, @output) = capture_err("somecommand", @args);
 
+=item B<hush_exec()>
+
+=item B<unhush_exec()>
+
+C<hush_exec> is used to indicate that the programs you are running are
+only of interest to someone debugging the script.  So, the messages
+showing commands run and giving execution timings will not be printed
+without C<-vv> (double verbose) or C<-d> (debug, which is the same
+thing).
+
 =item B<start_timer()>
 
 =item B<show_delta()>
@@ -391,6 +401,8 @@ prompts for yes or no, presuming neither
 
 prompts for yes or no, presuming yes and no, respectively.
 
+You can also spell these as C<prompt_nY> and C<prompt_Ny>.
+
 =item B<anydump($ref)>
 
 Dump C<$ref> via C<YAML>, falling back to C<Data::Dumper> if YAML
@@ -453,6 +465,8 @@ traditional L<Getopt::Long> and L<Pod::Usage> combination.
 L<Getopt::Plus> is a swiss army chainsaw of Getopt::* style modules,
 contrasting to this module's approach of elegant simplicity (quiet in
 the cheap seats!).
+
+L<Getopt::EUCLID> is Damian Conway's take on this.
 
 If you have solved this problem in a new and interesting way, or even
 rehashed it in an old, boring and inelegant way and want your module
