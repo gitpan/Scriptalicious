@@ -6,7 +6,7 @@ use strict;
 use warnings;
 use Carp qw(croak);
 
-our $VERSION = "1.12";
+our $VERSION = "1.13";
 
 use Getopt::Long;
 use base qw(Exporter);
@@ -538,7 +538,12 @@ sub sci_unit {
 
 sub getconf {
     my $conf_obj;
-    eval 'use YAML'; barf "failed to include YAML; $@" if $@;
+    eval 'use YAML';
+    if ($@) {
+    	local($gotconf) = 1;
+        moan "failed to include YAML; not able to load config";
+	return @_;
+    }
     for my $loc ( "$ENV{HOME}/.${PROGNAME}rc",
 		  "/etc/perl/$PROGNAME.conf",
 		  "/etc/$PROGNAME.conf",
@@ -567,8 +572,12 @@ sub getconf {
 
 sub getconf_f {
     my $filename = shift;
-    eval 'use YAML'; barf "failed to include YAML; $@" if $@;
-
+    eval 'use YAML';
+    if ($@) {
+    	local($gotconf) = 1;
+        moan "failed to include YAML; not able to load config";
+	return @_;
+    }
     my $conf_obj;
 
     if ( $filename eq "POD" ) {

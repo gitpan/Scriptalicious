@@ -13,6 +13,7 @@ t/05-prompt.t
 t/06-anydump.t
 t/07-tsay.t
 t/08-unit.t
+t/09-noyaml.t
 t/dump.pl
 t/eg.conf
 t/fork.pl
@@ -24,5 +25,4 @@ t/prompter.pl
 t/pu.pl
 t/tsay.pl
 t/Util.pm
-TODO
 META.yml                                 Module meta-data (added by MakeMaker)
