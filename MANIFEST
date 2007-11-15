@@ -1,7 +1,8 @@
 Changes.pod
 lib/Scriptalicious.pm
 lib/Scriptalicious.pod
-MANIFEST
+Makefile.PL
+MANIFEST			This list of files
 MANIFEST.SKIP
 README
 t/01-mmmdelicious.t
@@ -11,6 +12,7 @@ t/04-fork.t
 t/05-prompt.t
 t/06-anydump.t
 t/07-tsay.t
+t/08-unit.t
 t/dump.pl
 t/eg.conf
 t/fork.pl

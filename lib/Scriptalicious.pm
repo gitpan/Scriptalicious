@@ -6,7 +6,7 @@ use strict;
 use warnings;
 use Carp qw(croak);
 
-our $VERSION = "1.11";
+our $VERSION = "1.12";
 
 use Getopt::Long;
 use base qw(Exporter);
@@ -22,6 +22,7 @@ BEGIN {
 		     prompt_nY prompt_Ny prompt_ny
 		     prompt_int tsay anydump prompt_regex prompt_sub
 		     prompt_file hush_exec unhush_exec
+		     getopt_lenient time_unit
 		    );
 }
 
@@ -64,8 +65,7 @@ BEGIN {
 
 END { $closure->() if $closure }
 
-sub getopt {
-
+sub getopt_lenient {
     local($closure) = \&show_usage;
 
     $gotconf = 1;
@@ -84,6 +84,13 @@ sub getopt {
 
     shift @ARGV, return if $#ARGV >= 0 and $ARGV[0] eq "--";
 
+}
+
+sub getopt {
+    local($closure) = \&show_usage;
+
+    getopt_lenient(@_);
+
     abort("unrecognised option: $ARGV[0]")
 	if $#ARGV >= 0 and $ARGV[0] =~ m/^-/;
 }
@@ -98,7 +105,7 @@ sub abort { _err_say "aborting: @_"; &show_usage; }
 sub moan { _err_say "warning: @_" }
 sub protest { _err_say "error: @_" }
 sub barf { if($^S){die @_}else{ _err_say "ERROR: @_"; exit(1); } }
-sub _autoconf { getopt( eval{ my @x = getconf(@_); @x } ) }
+sub _autoconf { getopt_lenient( eval{ my @x = getconf(@_); @x } ) }
 
 #---------------------------------------------------------------------
 #  helpers for running commands and/or capturing their output
@@ -449,17 +456,61 @@ sub start_timer {
 sub show_elapsed {
      my $e = tv_interval($_[0]||$start, [gettimeofday()]);
 
-     return sci_unit($e, "s", 3);
+     return time_unit($e, 3);
 }
 
 sub show_delta {
     my $now;
     my $e = tv_interval($_[0]||$last, $now = [gettimeofday()]);
     $last = $now;
-    return sci_unit($e, "s", 3);
+    return time_unit($e, 3);
 }
 
 use POSIX qw(ceil);
+my @time_mul = (["w", 7*86400], ["d", 86400, " "], ["h", 3600, ":"],
+		["m", 60, ":" ], ["s", 1, 0],
+		[ "ms", 0.001 ], [ "us", 1e-6 ], ["ns", 1e-9]);
+sub time_unit {
+    my $scalar = shift;
+    my $d = (shift) || 4;
+    if ($scalar == 0) {
+        return "0s";
+    }
+    my $quanta = exp(log($scalar)-2.3025851*$d);
+    my $rem = $scalar+0;
+    my $rv = "";
+    for my $i (0..$#time_mul) {
+    	my $unit = $time_mul[$i];
+	if ($rv or $unit->[1] <= $rem ) {
+	   my $x = int($rem/$unit->[1]);
+	   my $new_rem = ($x ? $rem - ($x*$unit->[1]) : $rem);
+	   my $last = ($time_mul[$i+1][1]<$quanta);
+    	   if ($last and $new_rem >= $unit->[1]/2) {
+	       $x++;
+	   }
+	   if (!$last and $unit->[2]) {
+	       $rv .= $x.$unit->[0].$unit->[2];
+	   }
+	   elsif (defined $unit->[2] and !$unit->[2]) {
+	       # stop at seconds
+	       my $prec = ceil(-log($quanta)/log(10)-1.01);
+	       if ( $prec >= 1 ) {
+		       $rv .= sprintf("%.${prec}f", $rem).$unit->[0];
+	       }
+	       else {
+		       $rv .= sprintf("%d", $rem).$unit->[0];
+	       }
+	       last;
+	   }
+	   else {
+	       $rv .= $x.$unit->[0];
+	   }
+	   last if $last;
+	   $rem = $new_rem;
+	}
+    }
+    $rv;
+}
 
 my %prefixes=(18=>"E",15=>"P",12=>"T",9=>"G",6=>"M",3=>"k",0=>"",
 	      -3=>"m",-6=>"u",-9=>"n",-12=>"p",-15=>"f",-18=>"a");
