@@ -130,6 +130,12 @@ It is recommended that you only ever read this variable, and pass it
 in via the import.  This is not automatically extracted from the POD
 for performance reasons.
 
+=item C<$CONFIG>
+
+Name of the configuration file.  Set before a call to C<getconf>, or
+read afterwards to see if a config file was used.  New in
+Scriptalicious 1.16
+
 =item B<getopt(@getopt_args)>
 
 Fetch arguments via C<Getopt::Long::GetOptions>.  The C<bundling>
@@ -491,6 +497,10 @@ contrasting to this module's approach of elegant simplicity (quiet in
 the cheap seats!).
 
 L<Getopt::EUCLID> is Damian Conway's take on this.
+
+Finally, if you don't mind the dependencies of Moose (or Mouse), then
+L<MooseX::Getopt> and L<MooseX::SimpleConfig> are much more elegant
+approaches to getopt handling and configuration than this module.
 
 If you have solved this problem in a new and interesting way, or even
 rehashed it in an old, boring and inelegant way and want your module

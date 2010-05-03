@@ -1,8 +1,0 @@
-.git
-.gitignore
-.*.tar.gz
-MANIFEST.bak
-Makefile(.bak)?$
-~$
-^blib
-pm_to_blib
