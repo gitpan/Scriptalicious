@@ -1,6 +1,18 @@
 
 =head1 WHATS NEW IN SCRIPTALICIOUS
 
+=head2 VERSION 1.17
+
+=over
+
+=item Fix deadlock with C<out =E<gt> sub { ... }>
+
+Between Perl versions 5.17.5 and 5.17.6, a change was introduced which
+exposed a common pipe deadlock bug in this module, if you used closures
+which handle filehandles. [closes: RT#85999]
+
+=back
+
 =head2 VERSION 1.16
 
 =over
